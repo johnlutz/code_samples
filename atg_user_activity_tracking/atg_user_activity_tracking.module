@@ -1,0 +1,398 @@
+<?php
+/**
+ * @file
+ * Code for the ATG User Activity Tracking custom module.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function atg_user_activity_tracking_menu() {
+  $items['user-tracking/insert-idle'] = array(
+    title => t('User Tracking Insert Idle'),
+    'page callback' => 'atg_user_activity_tracking_insert_idle',
+    'access callback' => 'atg_user_activity_tracking_user_has_role',
+    'type' => MENU_CALLBACK,
+  );
+  $items['admin/config/people/user-tracking'] = array(
+    'title' => t('User Activity Tracking'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('atg_user_activity_tracking_settings_form'),
+    'access arguments' => array('Access administration menu'),
+    'type' => MENU_LOCAL_TASK,
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_init().
+ */
+function atg_user_activity_tracking_init() {
+  global $user;
+  if (atg_user_activity_tracking_user_has_role()) {
+    if (!preg_match('/^.*\.(jpe?g|gif|png|tiff)$/i', current_path()) && !preg_match('/^.*(login|logout|insert-idle)$/i', current_path()) && !preg_match('/^.*ajax.*$/i', current_path())) {
+      // Adds javascript for tracking user idleness.
+      drupal_add_js(array('atg_user_activity_tracking' => array('idle_time' => variable_get('atg_user_activity_tracking_idle_time', 120))), 'setting');
+      drupal_add_js(drupal_get_path('module', 'atg_user_activity_tracking') . '/js/vendor/riveted.min.js', array('type' => 'file', 'scope' => 'header'));
+      drupal_add_js(drupal_get_path('module', 'atg_user_activity_tracking') . '/js/atg_user_activity_tracking.js', array('type' => 'file', 'scope' => 'header'));
+
+      // Adds 'page visited' activity to database.
+      $uid              = $user->uid;
+      $activity         = 'Visited a page.';
+      $activity_page    = url(current_path(), array('absolute' => TRUE));
+      $activity_time    = time();
+
+      db_insert('atg_user_current_activities')
+        ->fields(array(
+          'uid'       => $uid,
+          'activity'  => $activity,
+          'page'      => $activity_page,
+          'timestamp' => $activity_time,
+        ))
+        ->execute();
+    }
+  }
+}
+
+/**
+ * Implements hook_user_login().
+ */
+function atg_user_activity_tracking_user_login(&$edit, $account) {
+  if (in_array('technician support', $account->roles)) {
+    // Adds 'login' activity to database for users with TS role.
+    $uid = $account->uid;
+    $activity = 'Logged in.';
+    $activity_page = $_SERVER['HTTP_REFERER'];
+    $activity_time = time();
+
+    db_insert('atg_user_current_activities')
+      ->fields(array(
+        'uid' => $uid,
+        'activity' => $activity,
+        'page' => $activity_page,
+        'timestamp' => $activity_time,
+      ))
+      ->execute();
+  }
+}
+
+/**
+ * Implements hook_user_logout().
+ */
+function atg_user_activity_tracking_user_logout($account) {
+  if (in_array('technician support', $account->roles)) {
+    // Adds 'logout' activity to database for users with TS role.
+    $uid           = $account->uid;
+    $activity      = 'Logged out.';
+    $activity_page = $_SERVER['HTTP_REFERER'];
+    $activity_time = time();
+
+    db_insert('atg_user_current_activities')
+      ->fields(array(
+        'uid'       => $uid,
+        'activity'  => $activity,
+        'page'      => $activity_page,
+        'timestamp' => $activity_time,
+      ))
+      ->execute();
+  }
+}
+
+/**
+ * Implements hook_node_insert().
+ */
+function atg_user_activity_tracking_node_insert($node) {
+  global $user;
+  if (atg_user_activity_tracking_user_has_role()) {
+    // Adds 'created node' activity to database for users with TS role.
+    $uid              = $user->uid;
+    $activity         = 'Created a ' . $node->type . ' node.';
+    $activity_page    = url(current_path(), array('absolute' => TRUE));
+    $activity_context = $node->nid;
+    $activity_time    = time();
+
+    db_insert('atg_user_current_activities')
+      ->fields(array(
+        'uid'       => $uid,
+        'activity'  => $activity,
+        'page'      => $activity_page,
+        'context'   => $activity_context,
+        'timestamp' => $activity_time,
+      ))
+      ->execute();
+  }
+}
+
+/**
+ * Implements hook_node_update().
+ */
+function atg_user_activity_tracking_node_update($node) {
+  global $user;
+  if (atg_user_activity_tracking_user_has_role()) {
+    // Adds 'updated node' activity to database for users with TS role.
+    $uid              = $user->uid;
+    $activity         = 'Updated a ' . $node->type . ' node.';
+    $activity_page    = url(current_path(), array('absolute' => TRUE));
+    $activity_context = $node->nid;
+    $activity_time    = time();
+
+    db_insert('atg_user_current_activities')
+      ->fields(array(
+        'uid'       => $uid,
+        'activity'  => $activity,
+        'page'      => $activity_page,
+        'context'   => $activity_context,
+        'timestamp' => $activity_time,
+      ))
+      ->execute();
+  }
+}
+
+/**
+ * Implements hook_user_insert().
+ */
+function atg_user_activity_tracking_user_insert(&$edit, $account, $category) {
+  global $user;
+  if (atg_user_activity_tracking_user_has_role()) {
+    // Adds 'created user' activity to database for users with TS role.
+    $uid              = $user->uid;
+    $activity         = 'Added a user.';
+    $activity_page    = url(current_path(), array('absolute' => TRUE));
+    $activity_context = $account->uid;
+    $activity_time    = time();
+
+    db_insert('atg_user_current_activities')
+      ->fields(array(
+        'uid'       => $uid,
+        'activity'  => $activity,
+        'page'      => $activity_page,
+        'context'   => $activity_context,
+        'timestamp' => $activity_time,
+      ))
+      ->execute();
+  }
+}
+
+/**
+ * Implements hook_user_update().
+ */
+function atg_user_activity_tracking_user_update(&$edit, $account, $category) {
+  global $user;
+  if (atg_user_activity_tracking_user_has_role()) {
+    // Adds 'updated user' activity to database for users with TS role.
+    $uid              = $user->uid;
+    $activity         = 'Updated a user.';
+    $activity_page    = url(current_path(), array('absolute' => TRUE));
+    $activity_context = $account->uid;
+    $activity_time    = time();
+
+    db_insert('atg_user_current_activities')
+      ->fields(array(
+        'uid'       => $uid,
+        'activity'  => $activity,
+        'page'      => $activity_page,
+        'context'   => $activity_context,
+        'timestamp' => $activity_time,
+      ))
+      ->execute();
+  }
+}
+
+/**
+ * Implements hook_comment_insert().
+ */
+function atg_user_activity_tracking_comment_insert($comment) {
+  global $user;
+  if (atg_user_activity_tracking_user_has_role()) {
+    // Adds 'created comment' activity to database for users with TS role.
+    $uid              = $user->uid;
+    $activity         = 'Created a comment.';
+    $activity_page    = url(current_path(), array('absolute' => TRUE));
+    $activity_context = $comment->cid;
+    $activity_time    = time();
+
+    db_insert('atg_user_current_activities')
+      ->fields(array(
+        'uid'       => $uid,
+        'activity'  => $activity,
+        'page'      => $activity_page,
+        'context'   => $activity_context,
+        'timestamp' => $activity_time,
+      ))
+      ->execute();
+  }
+}
+
+/**
+ * Implements hook_comment_update().
+ */
+function atg_user_activity_tracking_comment_update($comment) {
+  global $user;
+  if (atg_user_activity_tracking_user_has_role()) {
+    // Adds 'updated comment' activity to database for users with TS role.
+    $uid              = $user->uid;
+    $activity         = 'Updated a comment.';
+    $activity_page    = url(current_path(), array('absolute' => TRUE));
+    $activity_context = $comment->cid;
+    $activity_time    = time();
+
+    db_insert('atg_user_current_activities')
+      ->fields(array(
+        'uid'       => $uid,
+        'activity'  => $activity,
+        'page'      => $activity_page,
+        'context'   => $activity_context,
+        'timestamp' => $activity_time,
+      ))
+      ->execute();
+  }
+}
+
+/**
+ * Implements hook_comment_delete().
+ */
+function atg_user_activity_tracking_comment_delete($comment) {
+  global $user;
+  if (atg_user_activity_tracking_user_has_role()) {
+    // Adds 'deleted comment' activity to database for users with TS role.
+    $uid              = $user->uid;
+    $activity         = 'Deleted a comment.';
+    $activity_page    = url(current_path(), array('absolute' => TRUE));
+    $activity_context = $comment->cid;
+    $activity_time    = time();
+
+    db_insert('atg_user_current_activities')
+      ->fields(array(
+        'uid'       => $uid,
+        'activity'  => $activity,
+        'page'      => $activity_page,
+        'context'   => $activity_context,
+        'timestamp' => $activity_time,
+      ))
+      ->execute();
+  }
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function atg_user_activity_tracking_views_api() {
+  return array(
+    'api'  => '3',
+    'path' => drupal_get_path('module', 'atg_user_activity_tracking') . '/views',
+  );
+}
+
+/**
+ * Implements hook_cron().
+ */
+function atg_user_activity_tracking_cron() {
+  // Get UID of all users who performed actions since last cron run.
+  $query = db_query('SELECT DISTINCT uid FROM {atg_user_current_activities}');
+  $users = $query->fetchAll();
+
+  foreach ($users as $user) {
+    // Get all actions for each unique user.
+    $query = db_query('SELECT * FROM {atg_user_current_activities} WHERE uid = :uid', array(':uid' => $user->uid));
+    $user_action_results = $query->fetchAll();
+    $end_array_action    = end($user_action_results);
+    db_query('DELETE FROM {atg_user_current_activities} WHERE ca_id = :ca_id', array(':ca_id' => $last_action->ca_id));
+
+    foreach ($user_action_results as $key => $action) {
+      if ($action->activity !== 'Logged out.' && !empty($user_action_results[$key + 1])) {
+        $action_duration = $user_action_results[$key + 1]->timestamp - $action->timestamp;
+      }
+      else {
+        $action_duration = 0;
+      }
+
+      // Make sure the last activity wasn't idle.
+      if ($action->activity !== 'Idle') {
+          db_insert('atg_user_aggregate_activities')
+          ->fields(array(
+            'uid'        => $action->uid,
+            'activity'   => $action->activity,
+            'page'       => $action->page,
+            'context'    => $action->context,
+            'start_time' => $action->timestamp,
+            'duration'   => $action_duration,
+          ))
+          ->execute();
+      }
+
+      db_query('DELETE FROM {atg_user_current_activities} WHERE ca_id = :ca_id', array(':ca_id' => $action->ca_id));
+    }
+  }
+}
+
+/**
+ * Implements hook_views_pre_render().
+ */
+function atg_user_activity_tracking_views_pre_render(&$view) {
+  if ($view->name == 'user_activities' && $view->current_display == 'page') {
+    foreach ($view->result as &$result) {
+      // Format as hours, mins, secs.
+      $result->atg_user_aggregate_activities_duration = gmdate("H:i:s", $result->atg_user_aggregate_activities_duration);
+    }
+  }
+}
+
+/**
+ * Access callback to only let 1 role use().
+ */
+function atg_user_activity_tracking_user_has_role() {
+  global $user;
+  if (in_array('technician support', $user->roles)) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Page callback to insert idle activity records().
+ */
+function atg_user_activity_tracking_insert_idle() {
+  global $user;
+  // See what the last activity was for this user.
+  $last_activity = db_select('atg_user_current_activities', 'a')
+       ->fields('a', array('activity'))
+       ->condition('a.uid', $user->uid)
+       ->orderBy('a.timestamp', 'DESC')
+       ->range(0, 1)
+       ->execute()
+       ->fetchField();
+
+  if ($last_activity !== 'Idle') {
+    // Adds 'idle' activity to database.
+    $uid              = $user->uid;
+    $activity         = 'Idle';
+    $activity_page    = url(current_path(), array('absolute' => TRUE));
+    $activity_time    = time();
+
+    db_insert('atg_user_current_activities')
+      ->fields(array(
+        'uid'       => $uid,
+        'activity'  => $activity,
+        'page'      => $activity_page,
+        'timestamp' => $activity_time,
+      ))
+      ->execute();
+  }
+}
+
+/**
+ * System setttings form for setting user tracking config.
+ */
+function atg_user_activity_tracking_settings_form($form, &$form_state) {
+  $form['atg_user_activity_tracking_idle_time'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Idle Timeout Time'),
+    '#default_value' => variable_get('atg_user_activity_tracking_idle_time', 120),
+    '#size' => 5,
+    '#maxlength' => 5,
+    '#description' => t('The number of seconds that will trigger a idle timeout.'),
+    '#required' => TRUE,
+  );
+
+  return system_settings_form($form);
+}

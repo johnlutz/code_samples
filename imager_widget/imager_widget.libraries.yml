@@ -1,0 +1,11 @@
+imagerjs:
+  js:
+    imagerjs/imagerjs.js: {}
+    js/imager_widget.js: {}
+  css:
+    theme:
+      imagerjs/imagerjs.min.css: {}
+      css/imager_widget.css: {}
+  dependencies:
+    - core/jquery
+    - core/drupal

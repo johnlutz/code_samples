@@ -1,0 +1,10 @@
+calzoo_contests.contests:
+  title: 'Contests'
+  description: 'Configuration of contests.'
+  route_name: calzoo_contests.contests
+  parent: system.admin_config_system
+calzoo_contests.summer_2018_settings:
+  title: 'Summer 2018 Contest Configuration'
+  description: 'Configuration of Summer 2018 contest.'
+  route_name: calzoo_contests.summer_2018_settings
+  parent: calzoo_contests.contests

@@ -1,0 +1,32 @@
+<?php
+
+/**
+ * @file
+ * Contains imager_widget.module.
+ */
+
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Routing\RouteMatchInterface;
+
+/**
+ * Implements hook_help().
+ */
+function imager_widget_help($route_name, RouteMatchInterface $route_match) {
+  switch ($route_name) {
+    case 'help.page.imager_widget':
+      $output = '';
+      $output .= '<h3>' . t('About') . '</h3>';
+      $output .= '<p>' . t('Edit images in image form: rotate, crop');
+      $output .= '</dl>';
+      return $output;
+  }
+}
+
+/**
+ * Implements hook_field_widget_info_alter().
+ */
+function imager_widget_field_widget_info_alter(array &$info) {
+  // Let a new field type re-use an existing widget.
+  $info['image_image']['field_types'][] = 'imager_widget';
+}

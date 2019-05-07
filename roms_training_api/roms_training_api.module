@@ -1,0 +1,340 @@
+<?php
+
+/**
+ * @file
+ * Module for connecting to the CHTR Training REST API.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function roms_training_api_menu() {
+  $items = array();
+
+  $items['admin/config/roms/training'] = array(
+    'title' => 'Training API Connection',
+    'description' => 'Manage training api connection.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('roms_training_api_admin_form'),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_NORMAL_ITEM,
+    'file' => 'includes/roms_training_api_admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_cron().
+ */
+function roms_training_api_cron() {
+  roms_training_api_sync_user_training();
+}
+
+/**
+ * Connects to training api and syncs drupal users' training courses taken.
+ */
+function roms_training_api_sync_user_training() {
+  $company_id = variable_get('roms_training_api_company_id', 0);
+  $service = new RomsTrainingApiService();
+  $students = $service->getStudents($company_id);
+
+  if (empty($students)) {
+    drupal_set_message(t('There are no students associated with this company id.'), 'error');
+    return FALSE;
+  }
+  else {
+    // We have students.  Loop through them.
+    foreach ($students as $student) {
+      // See if user exists locally.
+      if ($user = roms_training_api_user_exists($student)) {
+        // Update the user.
+        roms_training_api_update_user($student, $user);
+      }
+      else {
+        // Create user.
+        $user = roms_training_api_create_user($student);
+      }
+
+      if (!empty($user)) {
+        // Get student courses from api.
+        $service = new RomsTrainingApiService();
+        $courses = $service->getStudentCourses($student->ID);
+        if (!empty($courses)) {
+          // Loop through courses that came from api.
+          foreach ($courses as $course) {
+            // Find training entity at drupal.
+            $training_nid = roms_training_api_get_training_node($course->ID);
+            // If it does not exist, create entity.
+            if (!$training_nid) {
+              $training_nid = roms_training_api_create_training_node($course);
+            }
+            // If it exists, check to see if it is attached to this user.
+            $fc_id = roms_training_api_user_has_training($user->uid, $training_nid);
+            if (!empty($fc_id)) {
+              // If it is attached, get the field collection item.
+              $fc_item = field_collection_item_load($fc_id);
+              $fc_item->updateHostEntity($user, 'user');
+              $fc_wrapper = entity_metadata_wrapper('field_collection_item', $fc_item->item_id);
+            }
+            else {
+              // If it isn't attached, create a new field collection item.
+              $fc_item = entity_create('field_collection_item', array('field_name' => 'field_training_fc'));
+              $fc_item->setHostEntity('user', $user);
+              $fc_wrapper = entity_metadata_wrapper('field_collection_item', $fc_item);
+            }
+            // Update the fc_item.
+            $fc_wrapper->field_training->set(intval($training_nid));
+            $my_date = new DateTime($course->dateRequalify);
+            $fc_item->field_expiration_date[LANGUAGE_NONE][0] = array(
+              'value' => date_format($my_date, 'Y-m-d'),
+              'timezone' => 'UTC',
+              'timezone_db' => 'UTC',
+            );
+            $fc_wrapper->save(TRUE);
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Looks up user in drupal with student data.
+ *
+ * @param object $student
+ *   Student data from training api.
+ *
+ * @return object
+ *   Drupal user object if found, FALSE if not.
+ */
+function roms_training_api_user_exists($student) {
+  // Lookup user by API ID.
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'user')
+    ->fieldCondition('field_api_id', 'value', $student->ID, '=')
+    ->addMetaData('account', user_load(1));
+  $result = $query->execute();
+  if (isset($result['user'])) {
+    $uids = array_keys($result['user']);
+    return user_load($uids[0]);
+  }
+
+  // Lookup user by email.
+  if (!empty($student->email)) {
+    $user = user_load_by_mail($student->email);
+    if (!empty($user)) {
+      return $user;
+    }
+  }
+
+  // Lookup user by fname, lname.
+  if (!empty($student->firstName) && !empty($student->lastName)) {
+    $query = new EntityFieldQuery();
+    $query->entityCondition('entity_type', 'user')
+      // TODO confirm this is case insensitive at host.
+      ->fieldCondition('field_first_name', 'value', $student->firstName, '=')
+      ->fieldCondition('field_last_name', 'value', $student->lastName, '=')
+      ->addMetaData('account', user_load(1));
+    $result = $query->execute();
+    if (isset($result['user'])) {
+      $uids = array_keys($result['user']);
+      // TODO Handle multiple matches.
+      return user_load($uids[0]);
+    }
+  }
+
+  // Didn't find user.
+  return FALSE;
+}
+
+/**
+ * Create a drupal user.
+ *
+ * @param object $student
+ *   Student data from training api.
+ *
+ * @return object
+ *   Drupal user object.
+ */
+function roms_training_api_create_user($student) {
+  // Check for email.
+  // TODO: How to handle no email.
+  $email = (!empty($student->email)) ? $student->email : 'noemail-' . $student->ID . '@railops.com';
+  // Set username.
+  $name = trim(strtolower($student->firstName)) . '.' . trim(strtolower($student->lastName)) . '-' . $student->ID;
+  $role = user_role_load_by_name('employee');
+  $values = array(
+    'name' => $name,
+    'pass' => 'TEMP123',
+    'mail' => $email,
+    'status' => 1,
+    'init' => $email,
+    'roles' => array(
+      DRUPAL_AUTHENTICATED_RID => 'authenticated user',
+      $role->rid => 'employee',
+    ),
+  );
+  $entity = user_save(NULL, $values);
+
+  roms_training_api_update_user($student, $entity);
+
+  return $entity;
+}
+
+/**
+ * Updates a drupal user data.
+ *
+ * @param object $student
+ *   Student data from training api.
+ * @param object $user
+ *   Drupal user object.
+ */
+function roms_training_api_update_user($student, $user) {
+  // Create an entity_metadata_wrapper around the user entity.
+  $ewrapper = entity_metadata_wrapper('user', $user);
+
+  // Set fields.
+  $ewrapper->field_first_name->set($student->firstName);
+  $ewrapper->field_last_name->set($student->lastName);
+  $ewrapper->field_api_id->set($student->ID);
+
+  if (!empty($student->phoneOne)) {
+    $ewrapper->field_phone_number->set($student->phoneOne);
+  }
+  $ewrapper->field_mailing_address = array(
+    'thoroughfare' => $student->addressOne,
+    'locality' => $student->city->name,
+    'administrative_area' => $student->province->abbr,
+    'postal_code' => $student->postal,
+    'country' => roms_training_api_get_country_iso($student->country->name),
+  );
+
+  // Now just save the wrapper and the entity.
+  $ewrapper->save();
+}
+
+/**
+ * Looks up a drupal training node from the course id from api.
+ *
+ * @param int $api_id
+ *   Course ID from training api.
+ *
+ * @return int
+ *   Drupal node nid.
+ */
+function roms_training_api_get_training_node($api_id) {
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'node')
+    ->entityCondition('bundle', 'training')
+    ->propertyCondition('status', NODE_PUBLISHED)
+    ->fieldCondition('field_api_id', 'value', $api_id, '=')
+    ->addMetaData('account', user_load(1));
+
+  $result = $query->execute();
+  if (isset($result['node'])) {
+    $nids = array_keys($result['node']);
+    return $nids[0];
+  }
+
+  return FALSE;
+}
+
+/**
+ * Creates a drupal training node.
+ *
+ * @param object $course
+ *   Course object from training api.
+ *
+ * @return int
+ *   Drupal node nid.
+ */
+function roms_training_api_create_training_node($course) {
+  $values = array(
+    'type' => 'training',
+    'uid' => 1,
+    'status' => 1,
+    'comment' => 0,
+    'promote' => 0,
+  );
+  $entity = entity_create('node', $values);
+
+  // Create an entity_metadata_wrapper around the new node entity.
+  $ewrapper = entity_metadata_wrapper('node', $entity);
+
+  // Set fields.
+  $ewrapper->title->set($course->name);
+  $ewrapper->body->set(array('value' => $course->description));
+  $ewrapper->field_api_id->set($course->ID);
+  $ewrapper->field_type->set($course->type);
+
+  // Now just save the wrapper and the entity.
+  $ewrapper->save();
+
+  return $entity->nid;
+}
+
+/**
+ * Lookup to see if user has a particular training course attached.
+ *
+ * @param int $uid
+ *   Drupal user uid.
+ * @param int $training_nid
+ *   Drupal node uid for the training course.
+ *
+ * @return object
+ *   If found, return field collection item object.  If not, return FALSE.
+ */
+function roms_training_api_user_has_training($uid, $training_nid) {
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'field_collection_item')
+    ->propertyCondition('field_name', 'field_training_fc')
+    ->fieldCondition('field_training', 'target_id', $training_nid, '=')
+    ->addMetaData('account', user_load(1));
+  $result = $query->execute();
+
+  if (isset($result['field_collection_item'])) {
+    $fc_items = array_keys($result['field_collection_item']);
+
+    // We found fc_items, are any attached to this user.
+    foreach ($fc_items as $fc_item) {
+      $query2 = new EntityFieldQuery();
+      $query2->entityCondition('entity_type', 'user')
+        ->propertyCondition('uid', $uid)
+        ->fieldCondition('field_training_fc', 'value', $fc_item)
+        ->addMetaData('account', user_load(1));
+      $result2 = $query2->execute();
+      if (isset($result2['user'])) {
+        // The user does have this training nid in a training field collection
+        // item. Return this item for updating.
+        return $fc_item;
+      }
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Convert country name to iso code.
+ *
+ * @param string $country
+ *   Full country name.
+ *
+ * @return string
+ *   If found, return country iso code.  If not, return FALSE.
+ */
+function roms_training_api_get_country_iso($country) {
+  if (!$country) {
+    return FALSE;
+  }
+  require_once DRUPAL_ROOT . '/includes/locale.inc';
+  $countries = country_get_list();
+  $country_iso = array_search($country, $countries);
+  if (!$country_iso) {
+    return FALSE;
+  }
+  else {
+    return $country_iso;
+  }
+}

@@ -1,0 +1,14 @@
+calzoo_contests.contests:
+  path: '/admin/config/system/contests'
+  defaults:
+    _controller: '\Drupal\calzoo_contests\Controller\ContestController::content'
+    _title: 'Contests'
+  requirements:
+    _permission: 'administer contests'
+calzoo_contests.summer_2018_settings:
+  path: '/admin/config/system/contests/summer_2018'
+  defaults:
+    _form: '\Drupal\calzoo_contests\Form\Summer2018ConfigurationForm'
+    _title: 'Summer 2018 Contest Configuration'
+  requirements:
+    _permission: 'administer contests'

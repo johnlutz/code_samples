@@ -1,0 +1,6 @@
+name: 'CalZoo Contests'
+type: module
+description: 'Functionality related to contests.'
+core: 8.x
+package: 'CalZoo'
+configure: calzoo_contests.summer_2018_settings

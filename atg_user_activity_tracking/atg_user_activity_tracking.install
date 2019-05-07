@@ -1,0 +1,211 @@
+<?php
+/**
+ * @file
+ * Install database tables for user activity tracking.
+ */
+
+function atg_user_activity_tracking_schema() {
+  $schema['atg_user_current_activities'] = array(
+    // Create user's current activity table.
+    'description' => 'The base table for a user\'s current activity.',
+    'fields' => array(
+      'ca_id' => array(
+        'description' => 'The primary identifier for the current activity.',
+        'type'        => 'serial',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'uid' => array(
+        'description' => 'The uid of the user who is logging the activity.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'activity' => array(
+        'description' => 'The activity performed.',
+        'type'        => 'varchar',
+        'length'      => 255,
+      ),
+      'page' => array(
+        'description' => 'The page where the activity took place.',
+        'type'        => 'varchar',
+        'length'      => 255,
+      ),
+      'context' => array(
+        'description' => 'The entity id, etc, on which the activity was performed.',
+        'type'        => 'blob',
+        'not null'    => FALSE,
+        'serialize'   => TRUE,
+        'size'        => 'big',
+      ),
+      'timestamp' => array(
+        'description' => 'The time that user performed the activity.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+    ),
+    'primary key' => array('ca_id'),
+  );
+
+  // Create user's aggregate activities table.
+  $schema['atg_user_aggregate_activities'] = array(
+    'description' => 'The base table for a user\'s aggregate activities.',
+    'fields' => array(
+      'aa_id' => array(
+        'description' => 'The primary identifier for the aggregate activity.',
+        'type'        => 'serial',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'uid' => array(
+        'description' => 'The uid of the user performing actions.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'activity' => array(
+        'description' => 'The activity performed.',
+        'type'        => 'varchar',
+        'length'      => 255,
+      ),
+      'page' => array(
+        'description' => 'The page where the activity took place.',
+        'type'        => 'varchar',
+        'length'      => 255,
+      ),
+      'context' => array(
+        'description' => 'The entity id (i.e. NID, CID, etc) on which the activity was performed.',
+        'type'        => 'blob',
+        'not null'    => FALSE,
+        'serialize'   => TRUE,
+        'size'        => 'big',
+      ),
+      'start_time' => array(
+        'description' => 'The UNIX timestamp for when the user started performing the activity.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'duration' => array(
+        'description' => 'The amount of time, in seconds, that it took the user to perform the activity.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+    ),
+    'primary key' => array('aa_id'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_update_N().
+ * Add the table atg_user_current_activities to store
+ * the user's current activities.
+ */
+function atg_user_activity_tracking_update_7000() {
+  if (!db_table_exists('atg_user_current_activities')) {
+    $schema['atg_user_current_activities'] = array(
+    'description' => 'The base table for a user\'s current activity.',
+    'fields' => array(
+      'ca_id' => array(
+        'description' => 'The primary identifier for the current activity.',
+        'type'        => 'serial',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'uid' => array(
+        'description' => 'The uid of the user who is logging the activity.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'activity' => array(
+        'description' => 'The activity performed.',
+        'type'        => 'varchar',
+        'length'      => 255,
+      ),
+      'page' => array(
+        'description' => 'The page where the activity took place.',
+        'type'        => 'varchar',
+        'length'      => 255,
+      ),
+      'context' => array(
+        'description' => 'The entity id (i.e. NID, CID, etc) on which the activity was performed.',
+        'type'        => 'blob',
+        'not null'    => FALSE,
+        'serialize'   => TRUE,
+        'size'        => 'big',
+      ),
+      'timestamp' => array(
+        'description' => 'The time that user performed the activity.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+    ),
+    'primary key' => array('ca_id'),
+  );
+    db_create_table('atg_user_current_activities', $schema['atg_user_current_activities']);
+  }
+}
+
+/**
+ * Implements hook_update_N().
+ * Add the table atg_user_aggregate_activities to store
+ * the user's aggregate activities.
+ */
+function atg_user_activity_tracking_update_7001() {
+  if (!db_table_exists('atg_user_aggregate_activities')) {
+    $schema['atg_user_aggregate_activities'] = array(
+    'description' => 'The base table for a user\'s aggregate activities.',
+    'fields' => array(
+      'aa_id' => array(
+        'description' => 'The primary identifier for the aggregate activity.',
+        'type'        => 'serial',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'uid' => array(
+        'description' => 'The uid of the user performing actions.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'activity' => array(
+        'description' => 'The activity performed.',
+        'type'        => 'varchar',
+        'length'      => 255,
+      ),
+      'page' => array(
+        'description' => 'The page where the activity took place.',
+        'type'        => 'varchar',
+        'length'      => 255,
+      ),
+      'context' => array(
+        'description' => 'The entity id, etc, on which the activity was performed.',
+        'type'        => 'blob',
+        'not null'    => FALSE,
+        'serialize'   => TRUE,
+        'size'        => 'big',
+      ),
+      'start_time' => array(
+        'description' => 'The UNIX timestamp for when the user started performing the activity.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'duration' => array(
+        'description' => 'The amount of time, in seconds, that it took the user to perform the activity.',
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+    ),
+    'primary key' => array('aa_id'),
+  );
+    db_create_table('atg_user_aggregate_activities', $schema['atg_user_aggregate_activities']);
+  }
+}

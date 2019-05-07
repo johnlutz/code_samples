@@ -1,0 +1,7 @@
+type: module
+core: 8.x
+name: Imager Widget
+description: 'Edit images in image form: rotate, crop.'
+package: Media
+dependencies:
+  - drupal:image

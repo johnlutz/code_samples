@@ -1,0 +1,42 @@
+<?php
+
+/**
+ * @file
+ * Contains calzoo_contests.module.
+ */
+
+use Drupal\Core\Routing\RouteMatchInterface;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Entity\EntityInterface;
+
+/**
+ * Implements hook_help().
+ */
+function calzoo_contests_help($route_name, RouteMatchInterface $route_match) {
+  switch ($route_name) {
+    // Main module help for the calzoo_contests module.
+    case 'help.page.calzoo_contests':
+      $output = '';
+      $output .= '<h3>' . t('About') . '</h3>';
+      $output .= '<p>' . t('Functionality related to contests') . '</p>';
+      return $output;
+
+    default:
+  }
+}
+
+/**
+ * Implements hook_webform_element_alter().
+ */
+function calzoo_contests_webform_element_alter(array &$element, FormStateInterface $form_state, array $context) {
+  if (!empty($element['#webform_id']) && $element['#webform_id'] === 'summer_2018_campaign--codes') {
+    $element['#element_validate'][] = array(
+      'Drupal\calzoo_contests\Element\CodesWebformMultiple',
+      'validateCodes'
+    );
+    $element['#process'][] = array(
+      'Drupal\calzoo_contests\Element\CodesWebformMultiple',
+      'processCodes'
+    );
+  }
+}

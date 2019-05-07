@@ -1,0 +1,6 @@
+name = ATG User Activity Tracking
+description = Custom module used to track the activity on the site of certain users. (i.e.Technician Support roles)
+core = 7.x
+package = ATG
+version = 7.x-1.0
+project = atg_user_activity_tracking
